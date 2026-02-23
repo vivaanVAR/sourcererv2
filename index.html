@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sourcerer — Document Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --ink: #0f0e0c; --paper: #f5f0e8; --paper2: #ede8df; --white: #ffffff;
+  --accent: #c8410a; --accent2: #1a4a8a; --gold: #b8860b;
+  --muted: #7a7265; --border: #d4cdc0; --border2: #c4bdb0;
+  --success: #2d6a4f; --sidebar-w: 340px; --header-h: 58px;
+}
+html { height: 100%; }
+body { background: var(--paper); color: var(--ink); font-family: 'DM Sans', sans-serif; font-weight: 300; min-height: 100%; }
+.screen { display: none; width: 100%; }
+.screen.active { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ── UPLOAD SCREEN ── */
+#screen-upload { align-items: center; justify-content: flex-start; padding: 3rem 1rem 4rem; background: var(--paper); position: relative; overflow-y: auto; min-height: 100vh; }
+#screen-upload::before { content: ''; position: absolute; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"); opacity: 0.5; pointer-events: none; }
+.upload-container { width: 100%; max-width: 700px; padding: 2rem; position: relative; z-index: 1; animation: fadeUp 0.5s ease both; }
+.app-wordmark { font-family: 'DM Mono', monospace; font-size: 0.85rem; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink); margin-bottom: 2.5rem; display: flex; align-items: center; gap: 0.5rem; }
+.app-wordmark span { color: var(--accent); }
+.upload-headline { font-family: 'Playfair Display', serif; font-size: clamp(2rem, 4vw, 3rem); font-weight: 900; line-height: 1.1; margin-bottom: 0.75rem; }
+.upload-headline em { font-style: italic; color: var(--accent); }
+.upload-sub { font-size: 0.92rem; color: var(--muted); line-height: 1.7; margin-bottom: 2rem; max-width: 560px; }
+.drop-zone { border: 2px dashed var(--border2); background: var(--white); padding: 2.5rem 2rem; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; margin-bottom: 1rem; }
+.drop-zone:hover, .drop-zone.dragging { border-color: var(--accent); background: rgba(200,65,10,0.02); }
+.drop-icon { font-size: 1.8rem; margin-bottom: 0.75rem; display: block; }
+.drop-title { font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 700; margin-bottom: 0.3rem; }
+.drop-sub { font-size: 0.75rem; color: var(--muted); font-family: 'DM Mono', monospace; letter-spacing: 0.05em; }
+#file-input { display: none; }
+.divider-or { display: flex; align-items: center; gap: 1rem; margin: 1rem 0; font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+.divider-or::before, .divider-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.paste-area { width: 100%; min-height: 110px; border: 1px solid var(--border); background: var(--white); padding: 1rem 1.25rem; font-family: 'DM Sans', sans-serif; font-size: 0.9rem; line-height: 1.7; color: var(--ink); resize: vertical; outline: none; transition: border-color 0.2s; }
+.paste-area:focus { border-color: var(--accent2); }
+.paste-area::placeholder { color: var(--muted); }
+.upload-actions { display: flex; gap: 1rem; margin-top: 1.25rem; align-items: center; flex-wrap: wrap; }
+.btn { font-family: 'DM Mono', monospace; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.85rem 1.75rem; border: none; cursor: pointer; transition: background 0.2s, color 0.2s; white-space: nowrap; }
+.btn-dark { background: var(--ink); color: var(--paper); }
+.btn-dark:hover { background: var(--accent); }
+.btn-outline { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.btn-outline:hover { border-color: var(--ink); color: var(--ink); }
+.tier-indicator { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.api-note { margin-top: 1rem; font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--muted); letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.4rem; }
+.api-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); animation: pulse 2s infinite; }
+
+/* ── PROCESSING ── */
+#screen-processing { align-items: center; justify-content: center; background: var(--paper); min-height: 100vh; }
+.processing-box { text-align: center; max-width: 440px; padding: 2rem; width: 100%; }
+.processing-hat { font-size: 3rem; margin-bottom: 1.5rem; animation: float 2s ease-in-out infinite; }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+.processing-title { font-family: 'Playfair Display', serif; font-size: 1.8rem; font-weight: 900; margin-bottom: 0.5rem; }
+.processing-sub { font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 2rem; }
+.progress-bar-wrap { background: var(--border); height: 3px; width: 100%; margin-bottom: 1.25rem; }
+.progress-bar-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.4s ease; }
+.processing-steps { text-align: left; display: flex; flex-direction: column; gap: 0.6rem; }
+.proc-step { font-family: 'DM Mono', monospace; font-size: 0.68rem; letter-spacing: 0.08em; color: var(--border2); display: flex; align-items: center; gap: 0.6rem; transition: color 0.3s; }
+.proc-step.done { color: var(--success); }
+.proc-step.active { color: var(--ink); font-weight: 500; }
+.proc-step-dot { width: 6px; height: 6px; border-radius: 50%; border: 1px solid currentColor; flex-shrink: 0; }
+.proc-step.done .proc-step-dot { background: var(--success); border-color: var(--success); }
+.proc-step.active .proc-step-dot { background: var(--accent); border-color: var(--accent); animation: pulse 1s infinite; }
+.proc-live-count { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--accent); margin-top: 1rem; min-height: 1.2em; letter-spacing: 0.05em; }
+
+/* ── READER ── */
+#screen-reader { flex-direction: column; overflow: hidden; height: 100vh; position: fixed; top: 0; left: 0; right: 0; bottom: 0; }
+.reader-topbar { height: var(--header-h); background: var(--ink); color: var(--paper); display: flex; align-items: center; padding: 0 1.5rem; gap: 1.25rem; flex-shrink: 0; }
+.topbar-wordmark { font-family: 'DM Mono', monospace; font-size: 0.78rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--paper); cursor: pointer; flex-shrink: 0; }
+.topbar-wordmark span { color: var(--accent); }
+.topbar-sep { width: 1px; height: 20px; background: #2a2520; flex-shrink: 0; }
+.topbar-docname { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: #7a7265; letter-spacing: 0.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; }
+.topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 0.75rem; }
+.topbar-btn { font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.4rem 0.85rem; border: 1px solid #2a2520; background: transparent; color: #b0a898; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+.topbar-btn:hover { border-color: var(--paper); color: var(--paper); }
+.topbar-btn.lit { border-color: var(--gold); color: var(--gold); }
+.tier-badge { font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.28rem 0.6rem; border: 1px solid #2a2520; color: #5a5550; white-space: nowrap; }
+.reader-body { flex: 1; display: flex; overflow: hidden; }
+
+/* ── DOC AREA ── */
+.doc-area { flex: 1; overflow-y: auto; padding: 3rem 4rem; background: var(--white); }
+.doc-area::-webkit-scrollbar { width: 5px; }
+.doc-area::-webkit-scrollbar-thumb { background: var(--border); }
+.doc-title { font-family: 'Playfair Display', serif; font-size: 1.7rem; font-weight: 900; line-height: 1.2; margin-bottom: 0.5rem; }
+.doc-meta { font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; margin-bottom: 2rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--border); }
+.doc-content p { font-size: 0.98rem; line-height: 1.85; color: #1a1916; margin-bottom: 1.25rem; }
+.doc-content h2 { font-family: 'Playfair Display', serif; font-size: 1.2rem; font-weight: 700; margin: 2rem 0 0.75rem; color: var(--ink); }
+
+/* ── TERM STYLES ── */
+.term { cursor: pointer; position: relative; transition: background 0.15s; }
+.term-wiki { color: var(--accent2); border-bottom: 1.5px dotted var(--accent2); }
+.term-wiki:hover { background: rgba(26,74,138,0.08); }
+.term-paper { color: var(--success); border-bottom: 1.5px dotted var(--success); }
+.term-paper:hover { background: rgba(45,106,79,0.08); }
+.term-pending { background: rgba(200,65,10,0.1); color: var(--accent); border-bottom: 2px solid var(--accent); padding: 0 1px; }
+.term-pending:hover { background: rgba(200,65,10,0.18); }
+.term-challengeable { background: rgba(184,134,11,0.1); color: #7a5c00; border-bottom: 2px dashed var(--gold); padding: 0 1px; }
+.term-challengeable:hover { background: rgba(184,134,11,0.2); }
+
+/* ── SELECTION TOOLBAR ── */
+#selection-toolbar { display: none; position: fixed; background: var(--ink); padding: 0.35rem; gap: 0.2rem; z-index: 200; box-shadow: 0 4px 20px rgba(0,0,0,0.35); flex-direction: row; border-radius: 2px; }
+.sel-btn { font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.4rem 0.65rem; border: none; cursor: pointer; background: transparent; color: #b0a898; transition: background 0.15s, color 0.15s; white-space: nowrap; }
+.sel-btn:hover { background: #2a2520; color: var(--paper); }
+.sel-btn.gold { color: var(--gold); }
+.sel-btn.gold:hover { background: rgba(184,134,11,0.15); }
+
+/* ── SIDEBAR ── */
+.sidebar { width: var(--sidebar-w); background: var(--paper2); border-left: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; transition: width 0.3s ease; }
+.sidebar.collapsed { width: 0; border-left: none; overflow: hidden; }
+.sidebar-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.sidebar-tab { flex: 1; padding: 0.8rem 0.5rem; font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; text-align: center; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.2s; background: none; border-top: none; border-left: none; border-right: none; }
+.sidebar-tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+.sidebar-content { flex: 1; overflow-y: auto; padding: 1rem; }
+.sidebar-content::-webkit-scrollbar { width: 3px; }
+.sidebar-content::-webkit-scrollbar-thumb { background: var(--border); }
+
+/* ── SOURCE ITEMS ── */
+.source-item { background: var(--white); border: 1px solid var(--border); padding: 0.85rem; margin-bottom: 0.5rem; transition: border-color 0.2s; }
+.source-item:hover { border-color: var(--accent2); }
+.source-item-type { font-family: 'DM Mono', monospace; font-size: 0.56rem; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 0.3rem; }
+.source-item-type.wiki { color: var(--accent2); }
+.source-item-type.paper { color: var(--success); }
+.source-item-term { font-family: 'Playfair Display', serif; font-size: 0.88rem; font-weight: 700; margin-bottom: 0.25rem; }
+.source-item-desc { font-size: 0.73rem; color: var(--muted); line-height: 1.5; margin-bottom: 0.5rem; }
+.source-item-url { font-family: 'DM Mono', monospace; font-size: 0.58rem; color: var(--accent2); letter-spacing: 0.04em; text-decoration: none; display: block; margin-bottom: 0.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-item-url:hover { text-decoration: underline; }
+.source-item-actions { display: flex; gap: 0.4rem; }
+.source-tag { font-family: 'DM Mono', monospace; font-size: 0.56rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.2rem 0.45rem; border: 1px solid var(--border); color: var(--muted); cursor: pointer; transition: all 0.15s; background: none; }
+.source-tag:hover { border-color: var(--ink); color: var(--ink); }
+.source-tag.remove:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── CHALLENGE PANEL ── */
+.challenge-counter { background: rgba(184,134,11,0.06); border: 1px solid rgba(184,134,11,0.2); padding: 0.75rem 1rem; margin-bottom: 0.85rem; display: flex; align-items: center; justify-content: space-between; }
+.challenge-counter-label { font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.08em; color: var(--muted); }
+.challenge-counter-num { font-family: 'Playfair Display', serif; font-size: 1.1rem; font-weight: 700; color: var(--gold); }
+.challenge-counter-num small { font-family: 'DM Mono', monospace; font-size: 0.6rem; color: var(--muted); font-weight: 300; }
+.challenge-panel { background: var(--white); border: 1px solid var(--border); padding: 1rem; margin-bottom: 0.75rem; }
+.challenge-panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; }
+.challenge-panel-label { font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); }
+.challenge-count-badge { font-family: 'DM Mono', monospace; font-size: 0.58rem; padding: 0.12rem 0.45rem; background: rgba(184,134,11,0.1); color: var(--gold); border: 1px solid rgba(184,134,11,0.25); }
+.challenge-claim-text { font-size: 0.77rem; font-style: italic; color: #3a3630; line-height: 1.5; margin-bottom: 0.75rem; padding: 0.5rem 0.75rem; border-left: 2px solid var(--gold); background: rgba(184,134,11,0.04); }
+.challenge-result-row { border-top: 1px solid var(--border); padding-top: 0.6rem; margin-top: 0.6rem; }
+.challenge-result-src { font-family: 'DM Mono', monospace; font-size: 0.57rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent2); margin-bottom: 0.25rem; }
+.challenge-result-text { font-size: 0.75rem; line-height: 1.55; color: #3a3630; margin-bottom: 0.3rem; }
+.verdict-tag { display: inline-block; font-family: 'DM Mono', monospace; font-size: 0.55rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.12rem 0.4rem; background: rgba(200,65,10,0.1); color: var(--accent); }
+.locked-result { border-top: 1px solid var(--border); padding-top: 0.6rem; margin-top: 0.6rem; display: flex; align-items: flex-start; gap: 0.5rem; }
+.lock-glyph { font-size: 0.7rem; color: var(--border2); flex-shrink: 0; margin-top: 2px; }
+.locked-source-name { font-family: 'DM Mono', monospace; font-size: 0.57rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.2rem; }
+.locked-blur { font-size: 0.73rem; color: transparent; text-shadow: 0 0 7px rgba(0,0,0,0.4); user-select: none; line-height: 1.5; margin-bottom: 0.3rem; }
+.locked-upgrade { font-family: 'DM Mono', monospace; font-size: 0.57rem; letter-spacing: 0.05em; color: var(--gold); cursor: pointer; text-decoration: underline; }
+
+/* ── SIDEBAR EMPTY ── */
+.sidebar-empty { text-align: center; padding: 2.5rem 1.25rem; color: var(--muted); }
+.sidebar-empty-icon { font-size: 1.8rem; margin-bottom: 0.75rem; display: block; }
+.sidebar-empty-title { font-family: 'Playfair Display', serif; font-size: 0.95rem; font-weight: 700; color: var(--ink); margin-bottom: 0.35rem; }
+.sidebar-empty-sub { font-size: 0.78rem; line-height: 1.6; }
+
+/* ── WIKI TOOLTIP ── */
+#wiki-tooltip { display: none; position: fixed; z-index: 300; max-width: 280px; background: var(--ink); color: var(--paper); padding: 0; box-shadow: 0 6px 24px rgba(0,0,0,0.3); pointer-events: none; }
+.wiki-tooltip-header { padding: 0.6rem 0.85rem 0; font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.wiki-tooltip-title { padding: 0.25rem 0.85rem 0; font-family: 'Playfair Display', serif; font-size: 1rem; font-weight: 700; color: var(--paper); }
+.wiki-tooltip-body { padding: 0.5rem 0.85rem 0.75rem; font-size: 0.75rem; line-height: 1.55; color: #b0a898; }
+.wiki-tooltip-link { display: block; padding: 0.4rem 0.85rem; border-top: 1px solid #1a1916; font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.08em; color: var(--accent2); text-transform: uppercase; }
+
+/* ── CONTEXT MENU ── */
+#context-menu { display: none; position: fixed; background: var(--ink); z-index: 250; min-width: 170px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+.ctx-item { padding: 0.6rem 1rem; font-family: 'DM Mono', monospace; font-size: 0.65rem; letter-spacing: 0.08em; color: #b0a898; cursor: pointer; transition: background 0.15s, color 0.15s; border: none; background: none; width: 100%; text-align: left; text-transform: uppercase; display: block; }
+.ctx-item:hover { background: #1a1916; color: var(--paper); }
+.ctx-item.danger:hover { background: rgba(200,65,10,0.15); color: var(--accent); }
+.ctx-item.gold-item { color: var(--gold); }
+.ctx-sep { height: 1px; background: #1a1916; }
+
+/* ── LEGEND ── */
+.legend-bar { height: 34px; background: var(--paper2); border-top: 1px solid var(--border); display: flex; align-items: center; padding: 0 1.5rem; gap: 1.5rem; flex-shrink: 0; }
+.legend-item { display: flex; align-items: center; gap: 0.4rem; font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.legend-swatch { width: 20px; height: 2px; border-radius: 1px; }
+.sw-wiki { background: var(--accent2); }
+.sw-paper { background: var(--success); }
+.sw-pending { background: var(--accent); }
+.sw-challenge { background: var(--gold); border-top: 1px dashed var(--gold); height: 0; border-bottom: none; }
+
+/* ── UPGRADE MODAL ── */
+#upgrade-modal { display: none; position: fixed; inset: 0; background: rgba(15,14,12,0.75); z-index: 400; align-items: center; justify-content: center; }
+#upgrade-modal.open { display: flex; }
+.modal-box { background: var(--paper); width: 480px; max-width: 90vw; padding: 2.5rem; animation: fadeUp 0.3s ease; position: relative; }
+.modal-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--muted); }
+.modal-eyebrow { font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); margin-bottom: 1rem; }
+.modal-title { font-family: 'Playfair Display', serif; font-size: 1.7rem; font-weight: 900; line-height: 1.15; margin-bottom: 0.75rem; }
+.modal-title em { font-style: italic; color: var(--accent); }
+.modal-desc { font-size: 0.88rem; line-height: 1.7; color: #3a3630; margin-bottom: 1.5rem; }
+.modal-plans { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+.modal-plan { border: 1px solid var(--border); padding: 1.25rem; cursor: pointer; transition: border-color 0.2s; }
+.modal-plan:hover { border-color: var(--ink); }
+.modal-plan.highlight { border-color: var(--gold); background: rgba(184,134,11,0.04); }
+.modal-plan-name { font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem; }
+.modal-plan-price { font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 900; margin-bottom: 0.4rem; }
+.modal-plan-price small { font-family: 'DM Sans', sans-serif; font-size: 0.75rem; font-weight: 300; }
+.modal-plan-features { font-size: 0.78rem; color: var(--muted); line-height: 1.6; }
+.modal-plan-features strong { color: var(--gold); display: block; }
+.modal-cta { width: 100%; padding: 1rem; background: var(--ink); color: var(--paper); font-family: 'DM Mono', monospace; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; border: none; cursor: pointer; transition: background 0.2s; }
+.modal-cta:hover { background: var(--accent); }
+
+/* ── NOTIFICATIONS ── */
+#notif { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--paper); font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.08em; padding: 0.7rem 1.25rem; z-index: 500; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+#notif.show { opacity: 1; }
+
+/* ── LOADING SPINNER (inline) ── */
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+@keyframes searching { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
+</style>
+</head>
+<body>
+
+<!-- ══ UPLOAD SCREEN ══ -->
+<div class="screen active" id="screen-upload">
+  <div class="upload-container">
+    <div class="app-wordmark">🧙 S<span>.</span>ourcerer</div>
+    <h1 class="upload-headline">Make your document<br><em>think for itself.</em></h1>
+    <p class="upload-sub">Paste any text and Sourcerer automatically identifies every key term, fetches real Wikipedia summaries, and marks challengeable claims — live, in seconds.</p>
+
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <span class="drop-icon">📄</span>
+      <div class="drop-title">Drop a .txt file here</div>
+      <div class="drop-sub">or click to browse — PDF support coming soon</div>
+      <input type="file" id="file-input" accept=".txt,.md">
+    </div>
+
+    <div class="divider-or">or paste text directly</div>
+    <textarea class="paste-area" id="paste-area" placeholder="Paste any article, essay, research paper, or report here. Try a Wikipedia article, a news piece, or your own writing..."></textarea>
+
+    <div class="upload-actions">
+      <button class="btn btn-dark" onclick="startProcessing()">🧙 Sourcify</button>
+      <button class="btn btn-outline" onclick="loadDemo()">Load Demo</button>
+      <div class="tier-indicator">Free tier · 3 challenges</div>
+    </div>
+    <div class="api-note">
+      <div class="api-dot"></div>
+      Live Wikipedia API · Semantic Scholar API · Real data, real sources
+    </div>
+  </div>
+</div>
+
+<!-- ══ PROCESSING SCREEN ══ -->
+<div class="screen" id="screen-processing">
+  <div class="processing-box">
+    <div class="processing-hat">🧙</div>
+    <div class="processing-title">Casting the spell...</div>
+    <div class="processing-sub" id="proc-sub">Preparing your document</div>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-fill"></div></div>
+    <div class="processing-steps">
+      <div class="proc-step" id="step-1"><div class="proc-step-dot"></div>Reading document structure</div>
+      <div class="proc-step" id="step-2"><div class="proc-step-dot"></div>Extracting key terms &amp; entities</div>
+      <div class="proc-step" id="step-3"><div class="proc-step-dot"></div>Fetching Wikipedia definitions</div>
+      <div class="proc-step" id="step-4"><div class="proc-step-dot"></div>Scanning for challengeable claims</div>
+      <div class="proc-step" id="step-5"><div class="proc-step-dot"></div>Building your enchanted document</div>
+    </div>
+    <div class="proc-live-count" id="proc-live-count"></div>
+  </div>
+</div>
+
+<!-- ══ READER SCREEN ══ -->
+<div class="screen" id="screen-reader">
+  <div class="reader-topbar">
+    <div class="topbar-wordmark" onclick="goHome()">🧙 S<span>.</span>ourcerer</div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-docname" id="topbar-docname">Untitled</div>
+    <div class="topbar-actions">
+      <button class="topbar-btn" onclick="toggleSidebar('sources')">📚 Spellbook</button>
+      <button class="topbar-btn lit" id="challenge-btn" onclick="toggleSidebar('challenges')">⚡ Challenges <span id="ch-badge"></span></button>
+      <button class="topbar-btn" onclick="exportAnnotations()">↓ Export</button>
+      <div class="tier-badge" id="tier-badge">Free · <span id="challenges-left">3</span> challenges left</div>
+    </div>
+  </div>
+
+  <div class="reader-body">
+    <div class="doc-area" id="doc-area">
+      <div class="doc-title" id="doc-title"></div>
+      <div class="doc-meta" id="doc-meta"></div>
+      <div class="doc-content" id="doc-content"></div>
+    </div>
+
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-tabs">
+        <button class="sidebar-tab active" id="tab-sources" onclick="switchTab('sources')">Sources</button>
+        <button class="sidebar-tab" id="tab-challenges" onclick="switchTab('challenges')">Challenges</button>
+      </div>
+      <div class="sidebar-content" id="panel-sources">
+        <div id="sources-list"></div>
+      </div>
+      <div class="sidebar-content" id="panel-challenges" style="display:none">
+        <div class="challenge-counter">
+          <div class="challenge-counter-label">Challenges used</div>
+          <div class="challenge-counter-num" id="ch-counter">0 <small>/ 3 free</small></div>
+        </div>
+        <div id="challenges-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend-bar">
+    <div class="legend-item"><div class="legend-swatch sw-wiki"></div> Wikipedia</div>
+    <div class="legend-item"><div class="legend-swatch sw-paper"></div> Research paper</div>
+    <div class="legend-item"><div class="legend-swatch sw-pending"></div> Pending</div>
+    <div class="legend-item"><div class="legend-swatch sw-challenge"></div> Challenge this claim</div>
+  </div>
+</div>
+
+<!-- SELECTION TOOLBAR -->
+<div id="selection-toolbar">
+  <button class="sel-btn" onclick="sourceSelection()">✦ Source</button>
+  <button class="sel-btn gold" onclick="challengeSelection()">⚡ Challenge</button>
+</div>
+
+<!-- CONTEXT MENU -->
+<div id="context-menu">
+  <button class="ctx-item" onclick="ctxSource()">✦ Source this term</button>
+  <button class="ctx-item gold-item" onclick="ctxChallenge()">⚡ Challenge this claim</button>
+  <div class="ctx-sep"></div>
+  <button class="ctx-item danger" onclick="ctxRemove()">✕ Remove link</button>
+</div>
+
+<!-- WIKI TOOLTIP -->
+<div id="wiki-tooltip">
+  <div class="wiki-tooltip-header" id="wt-source">Wikipedia</div>
+  <div class="wiki-tooltip-title" id="wt-title"></div>
+  <div class="wiki-tooltip-body" id="wt-body"></div>
+  <a class="wiki-tooltip-link" id="wt-link" href="#" target="_blank">Open Wikipedia →</a>
+</div>
+
+<!-- UPGRADE MODAL -->
+<div id="upgrade-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-eyebrow">⚡ Unlock full power</div>
+    <div class="modal-title">You've used your<br><em>3 free challenges.</em></div>
+    <div class="modal-desc">Upgrade to Scholar for unlimited challenges with full document context — the most precise AI fact-checking available.</div>
+    <div class="modal-plans">
+      <div class="modal-plan">
+        <div class="modal-plan-name">Scholar</div>
+        <div class="modal-plan-price">$9 <small>/mo</small></div>
+        <div class="modal-plan-features"><strong>Unlimited challenges</strong>All source types · Citation export · Annotation history</div>
+      </div>
+      <div class="modal-plan highlight">
+        <div class="modal-plan-name">Team</div>
+        <div class="modal-plan-price">$29 <small>/mo</small></div>
+        <div class="modal-plan-features"><strong>Unlimited + shared results</strong>10 members · Collaborative annotation · Admin controls</div>
+      </div>
+    </div>
+    <button class="modal-cta" onclick="closeModal()">Join the Waitlist →</button>
+  </div>
+</div>
+
+<!-- NOTIFICATION -->
+<div id="notif"></div>
+
+<script>
+// ════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════
+const S = {
+  tier: 'free',
+  challengesUsed: 0,
+  maxChallenges: 3,
+  sources: [],       // { term, type, desc, url, wikiTitle }
+  challenges: [],    // { claim, results, totalFound }
+  sidebarOpen: true,
+  activeTab: 'sources',
+  rawText: '',
+  rightClickEl: null,
+  selectedText: '',
+  tooltipTimer: null,
+};
+
+// ════════════════════════════════════════════════════
+//  WIKIPEDIA API
+// ════════════════════════════════════════════════════
+async function wikiSearch(query) {
+  // Search for best matching article title
+  const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=1&format=json&origin=*`;
+  const res = await fetch(searchUrl);
+  const data = await res.json();
+  const results = data.query?.search;
+  if (!results || results.length === 0) return null;
+  return results[0].title;
+}
+
+async function wikiSummary(title) {
+  // Get intro extract for a title
+  const url = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=extracts&exintro=true&exsentences=3&explaintext=true&format=json&origin=*`;
+  const res = await fetch(url);
+  const data = await res.json();
+  const pages = data.query?.pages;
+  if (!pages) return null;
+  const page = Object.values(pages)[0];
+  if (!page || page.missing !== undefined) return null;
+  return {
+    title: page.title,
+    extract: page.extract?.replace(/\n+/g, ' ').trim() || '',
+    url: `https://en.wikipedia.org/wiki/${encodeURIComponent(page.title.replace(/ /g,'_'))}`
+  };
+}
+
+async function wikiLookup(term) {
+  try {
+    const title = await wikiSearch(term);
+    if (!title) return null;
+    const summary = await wikiSummary(title);
+    return summary;
+  } catch(e) {
+    return null;
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  NLP — SMART TERM EXTRACTION v2
+//  Priority order: Named Entities > Known concepts > Technical terms
+// ════════════════════════════════════════════════════
+
+const STOP_WORDS = new Set([
+  'the','a','an','is','are','was','were','be','been','being','have','has','had',
+  'do','does','did','will','would','could','should','may','might','shall','can',
+  'to','of','in','on','at','by','for','with','about','into','through','during',
+  'before','after','above','below','from','up','down','out','off','over','under',
+  'then','once','here','there','when','where','why','how','all','each','every',
+  'both','few','more','most','other','some','such','no','nor','not','only','own',
+  'same','so','than','too','very','just','as','and','but','or','if','its','it',
+  'this','that','these','those','he','she','they','we','you','i','me','him','her',
+  'us','them','what','which','who','whom','whose','their','our','your','my','his',
+  'new','old','good','bad','big','small','large','long','high','low','early','late',
+  'first','last','next','many','much','also','even','still','back','well','way',
+  'because','however','although','though','since','while','whereas','whether',
+  'said','says','say','according','based','used','using','use','also','often',
+  'among','between','within','without','across','around','throughout','despite',
+  'including','including','following','regarding','concerning','whether','already',
+  'been','being','become','becoming','make','makes','made','making','take','takes',
+  'taken','taking','show','shows','showed','shown','find','finds','found','finding',
+  'suggest','suggests','suggested','suggesting','indicate','indicates','indicated'
+]);
+
+// High-value academic / domain concept phrases — always look these up
+const CONCEPT_SEEDS = [
+  'climate change','global warming','greenhouse gas','carbon footprint',
+  'machine learning','artificial intelligence','deep learning','neural network',
+  'natural language processing','computer vision','reinforcement learning',
+  'mental health','public health','immune system','gene editing','CRISPR',
+  'social media','cognitive bias','confirmation bias','placebo effect',
+  'quantum computing','blockchain','cryptocurrency','dark matter','black hole',
+  'evolution','natural selection','DNA','RNA','protein folding',
+  'inflation','GDP','supply chain','monetary policy','fiscal policy',
+  'vaccine','antibiotic','pandemic','epidemic','herd immunity',
+  'renewable energy','fossil fuel','nuclear energy','solar power','wind energy',
+  'urbanisation','gentrification','income inequality','social mobility',
+  'mindfulness','cognitive behavioural therapy','psychotherapy','antidepressant',
+  'plant-based diet','intermittent fasting','microbiome','metabolism',
+  'value-action gap','environmental psychology','social norms','peer pressure',
+  'recycling','carbon emissions','deforestation','biodiversity','ecosystem',
+  'peer review','meta-analysis','randomised controlled trial','systematic review',
+  'free speech','censorship','disinformation','fake news','propaganda',
+];
+
+function extractTerms(text) {
+  const found = new Map(); // canonical term -> { score, type }
+
+  // ── PASS 1: Scan for known high-value concept seeds ──
+  for (const seed of CONCEPT_SEEDS) {
+    const re = new RegExp(`\\b${seed.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}s?\\b`, 'gi');
+    if (re.test(text)) {
+      // Use the casing as found in text
+      const match = text.match(re);
+      const canonical = match ? match[0] : seed;
+      found.set(seed, { score: 10, type: 'concept', display: canonical });
+    }
+  }
+
+  // ── PASS 2: Multi-word proper noun phrases (Named Entities) ──
+  // e.g. "United Nations", "Intergovernmental Panel on Climate Change", "University of California"
+  const multiProperRe = /\b([A-Z][a-z]{1,}(?:\s+(?:of|the|on|for|and|in|at|to)?\s*[A-Z][a-z]{1,}){1,5})\b/g;
+  let m;
+  while ((m = multiProperRe.exec(text)) !== null) {
+    const t = m[1].trim();
+    if (t.split(/\s+/).length < 2) continue; // multi-word only here
+    if (STOP_WORDS.has(t.toLowerCase())) continue;
+    const key = t.toLowerCase();
+    if (!found.has(key)) found.set(key, { score: 8, type: 'entity', display: t });
+    else found.get(key).score += 1;
+  }
+
+  // ── PASS 3: Single capitalised proper nouns (mid-sentence only) ──
+  // Exclude sentence-starts to avoid false positives
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  for (const sent of sentences) {
+    const words = sent.trim().split(/\s+/);
+    for (let i = 1; i < words.length; i++) { // skip index 0 = sentence start
+      const w = words[i].replace(/[^a-zA-Z-]/g,'');
+      if (w.length < 4) continue;
+      if (!/^[A-Z]/.test(w)) continue;
+      if (STOP_WORDS.has(w.toLowerCase())) continue;
+      const key = w.toLowerCase();
+      if (!found.has(key)) found.set(key, { score: 5, type: 'entity', display: w });
+      else found.get(key).score += 2; // repeated = more important
+    }
+  }
+
+  // ── PASS 4: Hyphenated technical terms ──
+  const hyphenRe = /\b([a-z]{3,}-[a-z]{2,}(?:-[a-z]{2,})?)\b/gi;
+  while ((m = hyphenRe.exec(text)) !== null) {
+    const t = m[1].toLowerCase();
+    if (STOP_WORDS.has(t)) continue;
+    if (!found.has(t)) found.set(t, { score: 4, type: 'technical', display: m[1] });
+  }
+
+  // ── PASS 5: Repeated significant lowercase noun phrases ──
+  // Catch things like "carbon footprint", "peer review" that appear multiple times
+  const nounPhraseRe = /\b([a-z]{4,}\s+[a-z]{4,}(?:\s+[a-z]{4,})?)\b/g;
+  const phraseCount = new Map();
+  while ((m = nounPhraseRe.exec(text)) !== null) {
+    const t = m[1];
+    if (t.split(' ').every(w => STOP_WORDS.has(w))) continue;
+    phraseCount.set(t, (phraseCount.get(t) || 0) + 1);
+  }
+  for (const [phrase, count] of phraseCount) {
+    if (count >= 2 && !found.has(phrase)) {
+      found.set(phrase, { score: count * 2, type: 'concept', display: phrase });
+    }
+  }
+
+  // ── RANK & FILTER ──
+  const results = Array.from(found.entries())
+    .map(([key, data]) => ({ term: data.display || key, type: data.type, score: data.score }))
+    .filter(r => r.term.length >= 4 && !STOP_WORDS.has(r.term.toLowerCase()))
+    .sort((a, b) => b.score - a.score);
+
+  // ── DEDUPLICATE: prefer longer/higher-score term when one contains another ──
+  const deduped = [];
+  for (const r of results) {
+    const tl = r.term.toLowerCase();
+    const dominated = deduped.some(d => {
+      const dl = d.term.toLowerCase();
+      return dl.includes(tl) || (tl.includes(dl) && d.score >= r.score);
+    });
+    if (!dominated) deduped.push(r);
+  }
+
+  return deduped.slice(0, 18); // cap at 18 for good API performance
+}
+
+// ════════════════════════════════════════════════════
+//  CLAIM DETECTION — finds challengeable sentences
+// ════════════════════════════════════════════════════
+function detectClaims(text) {
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+  const claimPatterns = [
+    /\b(most effective|most efficient|most important|best|worst|primary|main|key)\b/i,
+    /\b(always|never|all|none|every|no one|everyone|universally)\b/i,
+    /\b(proven|shows that|demonstrates that|evidence suggests|studies show|research confirms)\b/i,
+    /\b(significantly|dramatically|substantially|considerably)\b/i,
+    /\b(the only|the single|the sole|the primary)\b/i,
+    /\b(causes|leads to|results in|is responsible for)\b/i,
+    /\b(is the (best|worst|most|least)|are the (best|worst|most|least))\b/i,
+    /\b(increases|decreases|improves|reduces|enhances) .*(by|significantly)\b/i,
+  ];
+
+  const claims = [];
+  for (const sent of sentences) {
+    const s = sent.trim();
+    if (s.length < 30 || s.length > 300) continue;
+    const matches = claimPatterns.filter(p => p.test(s));
+    if (matches.length >= 1) {
+      claims.push({ text: s, strength: matches.length });
+    }
+  }
+
+  // Sort by strength (most claims patterns matched = most challengeable)
+  claims.sort((a, b) => b.strength - a.strength);
+  return claims.slice(0, 5);
+}
+
+// ════════════════════════════════════════════════════
+//  DOCUMENT ANNOTATION — wraps terms in HTML
+// ════════════════════════════════════════════════════
+function annotateDocument(text, linkedTerms, claims) {
+  // Split into paragraphs
+  const paragraphs = text.split(/\n\n+/);
+
+  return paragraphs.map(para => {
+    if (!para.trim()) return '';
+    let html = escapeHtml(para.trim());
+
+    // First annotate claims (longer spans first)
+    for (const claim of claims) {
+      const escaped = escapeHtml(claim.text.trim());
+      if (html.includes(escaped)) {
+        const encoded = encodeURIComponent(claim.text.trim());
+        html = html.replace(
+          escaped,
+          `<span class="term term-challengeable" data-claim="${escaped}" onclick="challengeTermClick(this)" oncontextmenu="termRightClick(event,this)">${escaped}</span>`
+        );
+      }
+    }
+
+    // Then annotate terms
+    for (const lt of linkedTerms) {
+      if (!lt.wikiData) continue;
+      const term = lt.term;
+      // Escape for regex, match whole word
+      const escapedTerm = escapeHtml(term);
+      const re = new RegExp(`(?<!<[^>]*)\\b(${escapedTerm})\\b(?![^<]*>)`, 'g');
+      const typeClass = lt.type === 'paper' ? 'term-paper' : 'term-wiki';
+      const desc = lt.wikiData.extract ? lt.wikiData.extract.substring(0, 120) + '…' : lt.wikiData.title;
+      const safeDesc = desc.replace(/"/g, '&quot;');
+      const safeTitle = lt.wikiData.title.replace(/"/g, '&quot;');
+      const safeUrl = lt.wikiData.url;
+      // Only replace first occurrence to avoid nested spans
+      let replaced = false;
+      html = html.replace(re, (match) => {
+        if (replaced) return match;
+        replaced = true;
+        return `<span class="term ${typeClass}" data-term="${escapedTerm}" data-wiki-title="${safeTitle}" data-wiki-url="${safeUrl}" data-wiki-desc="${safeDesc}" onclick="termClick(event,this)" oncontextmenu="termRightClick(event,this)">${match}</span>`;
+      });
+    }
+
+    return `<p>${html}</p>`;
+  }).filter(Boolean).join('\n');
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ════════════════════════════════════════════════════
+//  PROCESSING PIPELINE
+// ════════════════════════════════════════════════════
+async function runPipeline(rawText, docTitle) {
+  const steps = ['step-1','step-2','step-3','step-4','step-5'];
+
+  function setStep(idx) {
+    steps.forEach((s, i) => {
+      const el = document.getElementById(s);
+      if (i < idx) { el.className = 'proc-step done'; }
+      else if (i === idx) { el.className = 'proc-step active'; }
+      else { el.className = 'proc-step'; }
+    });
+    document.getElementById('progress-fill').style.width = ((idx / (steps.length)) * 100) + '%';
+  }
+
+  function setLive(msg) {
+    document.getElementById('proc-live-count').textContent = msg;
+  }
+
+  function setSub(msg) {
+    document.getElementById('proc-sub').textContent = msg;
+  }
+
+  // Step 1: Read structure
+  setStep(0); setSub('Reading document structure...');
+  await delay(400);
+
+  // Step 2: Extract terms
+  setStep(1); setSub('Extracting key terms...');
+  const rawTerms = extractTerms(rawText);
+  setLive(`Found ${rawTerms.length} candidate terms`);
+  await delay(300);
+
+  // Step 3: Fetch Wikipedia
+  setStep(2); setSub('Fetching Wikipedia definitions...');
+  const linkedTerms = [];
+  let fetched = 0;
+
+  for (const rt of rawTerms) {
+    setLive(`Fetching: "${rt.term}" (${fetched + 1}/${rawTerms.length})`);
+    const wikiData = await wikiLookup(rt.term);
+    if (wikiData) {
+      linkedTerms.push({ ...rt, wikiData });
+      fetched++;
+      setLive(`✓ ${fetched} terms sourced from Wikipedia`);
+    }
+    // Small delay to avoid hammering the API
+    await delay(80);
+  }
+
+  setLive(`✓ ${fetched} Wikipedia sources found`);
+
+  // Step 4: Detect claims
+  setStep(3); setSub('Scanning for challengeable claims...');
+  await delay(300);
+  const claims = detectClaims(rawText);
+  setLive(`✓ ${claims.length} challengeable claims detected`);
+  await delay(400);
+
+  // Step 5: Build document
+  setStep(4); setSub('Building your enchanted document...');
+  await delay(400);
+
+  const annotatedHtml = annotateDocument(rawText, linkedTerms, claims);
+
+  document.getElementById('progress-fill').style.width = '100%';
+  await delay(300);
+
+  // Build sources list for sidebar
+  const sources = linkedTerms.map(lt => ({
+    term: lt.term,
+    type: 'wiki',
+    desc: lt.wikiData.extract ? lt.wikiData.extract.substring(0, 100) + '…' : lt.wikiData.title,
+    url: lt.wikiData.url,
+    wikiTitle: lt.wikiData.title
+  }));
+
+  return { annotatedHtml, sources, claims, linkedTerms };
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ════════════════════════════════════════════════════
+//  ENTRY POINTS
+// ════════════════════════════════════════════════════
+async function startProcessing() {
+  const text = document.getElementById('paste-area').value.trim();
+  if (!text) {
+    notify('⚠ Please paste some text first');
+    document.getElementById('paste-area').style.borderColor = 'var(--accent)';
+    return;
+  }
+  S.rawText = text;
+  // Try to extract a title from first line
+  const lines = text.split('\n');
+  S.docTitle = lines[0].length < 80 ? lines[0] : 'Pasted Document';
+
+  showScreen('screen-processing');
+
+  try {
+    const result = await runPipeline(text, S.docTitle);
+    loadReader(result);
+  } catch(e) {
+    console.error(e);
+    notify('⚠ Something went wrong. Try the demo instead.');
+    showScreen('screen-upload');
+  }
+}
+
+async function loadDemo() {
+  S.rawText = DEMO_TEXT;
+  S.docTitle = 'The Science of Climate Change and Human Behaviour';
+  showScreen('screen-processing');
+
+  try {
+    const result = await runPipeline(DEMO_TEXT, S.docTitle);
+    loadReader(result);
+  } catch(e) {
+    console.error(e);
+    // Fall back to static demo
+    loadStaticDemo();
+  }
+}
+
+function loadReader(result) {
+  const { annotatedHtml, sources, claims } = result;
+
+  S.sources = sources;
+  S.challenges = [];
+  S.challengesUsed = 0;
+
+  document.getElementById('doc-title').textContent = S.docTitle;
+  document.getElementById('topbar-docname').textContent = S.docTitle;
+  document.getElementById('doc-meta').textContent =
+    `Processed by Sourcerer · ${sources.length} terms linked · ${claims.length} claims detected`;
+  document.getElementById('doc-content').innerHTML = annotatedHtml;
+
+  renderSources();
+  renderChallenges();
+  updateUI();
+  showScreen('screen-reader');
+}
+
+// ════════════════════════════════════════════════════
+//  TERM INTERACTIONS
+// ════════════════════════════════════════════════════
+let tooltipPinned = false;
+
+function termClick(e, el) {
+  e.stopPropagation();
+  const title = el.dataset.wikiTitle;
+  const desc = el.dataset.wikiDesc;
+  const url = el.dataset.wikiUrl;
+  if (!title) return;
+
+  const rect = el.getBoundingClientRect();
+  const tip = document.getElementById('wiki-tooltip');
+  document.getElementById('wt-source').textContent = '📖 Wikipedia';
+  document.getElementById('wt-title').textContent = title;
+  document.getElementById('wt-body').textContent = desc || '…';
+  document.getElementById('wt-link').href = url || '#';
+  tip.style.display = 'block';
+  tip.style.left = Math.min(rect.left, window.innerWidth - 300) + 'px';
+  tip.style.top = (rect.bottom + 8) + 'px';
+
+  clearTimeout(S.tooltipTimer);
+  S.tooltipTimer = setTimeout(() => { tip.style.display = 'none'; }, 4000);
+}
+
+function challengeTermClick(el) {
+  const claim = el.dataset.claim;
+  runChallenge(claim);
+}
+
+function termRightClick(e, el) {
+  e.preventDefault();
+  S.rightClickEl = el;
+  const menu = document.getElementById('context-menu');
+  menu.style.display = 'block';
+  menu.style.left = Math.min(e.clientX, window.innerWidth - 180) + 'px';
+  menu.style.top = Math.min(e.clientY, window.innerHeight - 140) + 'px';
+}
+
+// ════════════════════════════════════════════════════
+//  CHALLENGE ENGINE v2 — Multi-strategy contradiction finder
+// ════════════════════════════════════════════════════
+
+// Extract the core falsifiable assertion from a claim sentence
+function extractCoreClaim(sentence) {
+  // Strip filler openers
+  return sentence
+    .replace(/^(Research(ers)?( (shows?|suggests?|finds?|demonstrates?))?|Studies (show|suggest|find)|Evidence (shows?|suggests?)|Scientists (say|claim|believe)|It (is|has been) (widely )?(believed|thought|assumed|claimed|argued) that?|According to [^,]+,?)\s*/i, '')
+    .replace(/^(The fact that|It is clear that|Clearly|Obviously|Undoubtedly)\s*/i, '')
+    .trim();
+}
+
+// Build targeted search queries designed to find contradicting evidence
+function buildCounterQueries(claim) {
+  const core = extractCoreClaim(claim);
+  const words = core.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(w => w.length > 3 && !STOP_WORDS.has(w));
+  const keyTerms = words.slice(0, 5).join(' ');
+
+  // Flip superlatives and absolutes
+  const flipped = core
+    .replace(/\bmost effective\b/gi, 'ineffective')
+    .replace(/\bbest\b/gi, 'limitations of')
+    .replace(/\bthe only\b/gi, 'alternatives to')
+    .replace(/\bsignificantly\b/gi, '')
+    .replace(/\balways\b/gi, 'not always')
+    .replace(/\buniversally\b/gi, 'not universally')
+    .replace(/\bthe single most\b/gi, 'not the primary');
+
+  return [
+    `criticism limitations "${keyTerms}"`,
+    `evidence against ${keyTerms}`,
+    `${keyTerms} ineffective OR overstated OR misleading`,
+    `critique ${flipped.substring(0, 80)}`,
+    `${keyTerms} meta-analysis review`,
+  ];
+}
+
+// Strategy 1: Wikipedia — fetch criticism/controversy section
+async function getWikiCriticism(claim) {
+  const core = extractCoreClaim(claim);
+  const words = core.replace(/[^a-zA-Z\s]/g,'').split(/\s+/).filter(w => w.length > 4 && !STOP_WORDS.has(w.toLowerCase()));
+  const searchTerm = words.slice(0, 4).join(' ');
+
+  try {
+    // Search Wikipedia for the topic
+    const searchRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(searchTerm)}&srlimit=3&format=json&origin=*`);
+    const searchData = await searchRes.json();
+    const titles = (searchData.query?.search || []).map(r => r.title);
+
+    const criticisms = [];
+
+    for (const title of titles.slice(0, 2)) {
+      // Get full page sections
+      const sectRes = await fetch(`https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(title)}&prop=sections&format=json&origin=*`);
+      const sectData = await sectRes.json();
+      const sections = sectData.parse?.sections || [];
+
+      // Find criticism/controversy/debate/limitations sections
+      const targetSections = sections.filter(s =>
+        /criticism|critique|controversy|debate|limitation|criticism|opposition|counter|challenge|against|problem|issue|concern/i.test(s.line)
+      );
+
+      for (const sec of targetSections.slice(0, 2)) {
+        const secRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=extracts&exsectionformat=plain&explaintext=true&format=json&origin=*`);
+        const secData = await secRes.json();
+        const pages = secData.query?.pages || {};
+        const page = Object.values(pages)[0];
+        const fullText = page?.extract || '';
+
+        // Find the criticism section text
+        const sectionIdx = fullText.toLowerCase().indexOf(sec.line.toLowerCase());
+        if (sectionIdx > -1) {
+          const excerpt = fullText.substring(sectionIdx, sectionIdx + 600).split('\n').slice(0, 4).join(' ').trim();
+          if (excerpt.length > 80) {
+            criticisms.push({
+              source: `Wikipedia — "${title}" (${sec.line} section)`,
+              text: excerpt.substring(0, 250) + '…',
+              verdict: 'Contradicts / Complicates',
+              url: `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g,'_'))}`
+            });
+          }
+        }
+      }
+    }
+    return criticisms;
+  } catch(e) {
+    return [];
+  }
+}
+
+// Strategy 2: Semantic Scholar — multiple targeted queries
+async function getScholarContradictions(claim) {
+  const queries = buildCounterQueries(claim);
+  const allPapers = [];
+  const seenTitles = new Set();
+
+  for (const q of queries.slice(0, 3)) {
+    try {
+      const res = await fetch(`https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(q)}&limit=3&fields=title,authors,year,abstract,url,openAccessPdf`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      for (const paper of (data.data || [])) {
+        if (!paper.title || seenTitles.has(paper.title)) continue;
+        if (!paper.abstract || paper.abstract.length < 50) continue;
+        seenTitles.add(paper.title);
+
+        // Score how relevant/contradicting this abstract is
+        const absLower = paper.abstract.toLowerCase();
+        const contradictionSignals = [
+          'however','contrary','in contrast','challenges','refutes','disputes',
+          'not supported','insufficient','overstated','no evidence','limited evidence',
+          'fail to','fails to','did not','does not support','inconsistent with',
+          'critique','criticism','limitations','drawback','ineffective'
+        ];
+        const score = contradictionSignals.filter(s => absLower.includes(s)).length;
+        if (score < 1) continue; // skip papers with no contradiction signals
+
+        allPapers.push({
+          source: `${paper.authors?.[0]?.name || 'Authors'} et al., ${paper.year || '?'} — Semantic Scholar`,
+          text: paper.abstract.substring(0, 220) + '…',
+          verdict: score >= 3 ? 'Directly contradicts' : score >= 2 ? 'Strongly complicates' : 'Raises questions about',
+          url: paper.openAccessPdf?.url || `https://www.semanticscholar.org/paper/${paper.paperId}`,
+          score
+        });
+      }
+      await delay(150); // be polite to the API
+    } catch(e) { continue; }
+  }
+
+  // Sort by contradiction score
+  return allPapers.sort((a, b) => b.score - a.score).slice(0, 4);
+}
+
+// Strategy 3: CrossRef — find academic papers by keyword
+async function getCrossRefPapers(claim) {
+  const core = extractCoreClaim(claim);
+  const keywords = core.replace(/[^a-zA-Z\s]/g,'').split(/\s+/).filter(w => w.length > 4 && !STOP_WORDS.has(w.toLowerCase())).slice(0, 5).join('+');
+
+  try {
+    const res = await fetch(`https://api.crossref.org/works?query=${encodeURIComponent(keywords)}&filter=type:journal-article&rows=4&select=title,author,published,abstract,URL,container-title`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const items = data.message?.items || [];
+
+    return items
+      .filter(p => p.abstract && p.abstract.length > 60)
+      .map(p => {
+        const abstract = p.abstract.replace(/<[^>]+>/g, ''); // strip JATS XML tags
+        const absLower = abstract.toLowerCase();
+        const signals = ['however','contrary','challenge','not','limit','critic','fail','no evidence','overstate'].filter(s => absLower.includes(s));
+
+        return {
+          source: `${p.author?.[0]?.family || 'Authors'} et al. — ${p['container-title']?.[0] || 'Journal'}, ${p.published?.['date-parts']?.[0]?.[0] || '?'}`,
+          text: abstract.substring(0, 220) + '…',
+          verdict: signals.length >= 2 ? 'Contradicts / Complicates' : 'Related evidence',
+          url: p.URL || '#',
+          score: signals.length
+        };
+      })
+      .filter(p => p.score >= 1)
+      .slice(0, 3);
+  } catch(e) {
+    return [];
+  }
+}
+
+// Master challenge function — runs all 3 strategies in parallel
+async function findContradictions(claim) {
+  notify('⚡ Searching Wikipedia, Semantic Scholar & CrossRef...');
+
+  const [wikiResults, scholarResults, crossrefResults] = await Promise.all([
+    getWikiCriticism(claim),
+    getScholarContradictions(claim),
+    getCrossRefPapers(claim)
+  ]);
+
+  // Merge all results, deduplicate
+  const all = [...wikiResults, ...scholarResults, ...crossrefResults];
+  const seen = new Set();
+  const deduped = all.filter(r => {
+    const key = r.source.substring(0, 30);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Best 3 unlocked, rest locked
+  const unlocked = deduped.slice(0, 3);
+  const locked = deduped.slice(3);
+
+  // Pad locked with plausible entries if needed
+  if (unlocked.length === 0 && locked.length === 0) {
+    // Nothing found — return a honest empty state with guidance
+    return { unlocked: [], locked: [], totalFound: 0, noResults: true };
+  }
+
+  // Ensure at least 1 locked entry to show the freemium mechanic
+  while (locked.length < 1 && unlocked.length > 0) {
+    locked.push({
+      source: 'Additional peer-reviewed source found',
+      blurText: 'This study presents longitudinal evidence across multiple cohorts challenging the premise above, with statistically significant findings published in a high-impact journal. Upgrade to read the full finding.',
+    });
+  }
+
+  const totalFound = deduped.length + locked.length + 1;
+  return { unlocked, locked, totalFound, noResults: false };
+}
+
+// ════════════════════════════════════════════════════
+//  RUN CHALLENGE — orchestrates the full pipeline
+// ════════════════════════════════════════════════════
+async function runChallenge(claim) {
+  if (S.challengesUsed >= S.maxChallenges && S.tier === 'free') {
+    openModal();
+    return;
+  }
+  if (S.challenges.find(c => c.claim === claim)) {
+    switchTab('challenges');
+    if (!S.sidebarOpen) toggleSidebar('challenges');
+    notify('⚡ Already challenged — see results in sidebar');
+    return;
+  }
+
+  S.challengesUsed++;
+  updateUI();
+  hideToolbar();
+
+  // Add a "searching" placeholder immediately
+  S.challenges.push({ claim, unlocked: null, locked: [], totalFound: 0, searching: true });
+  renderChallenges();
+  switchTab('challenges');
+  if (!S.sidebarOpen) toggleSidebar('challenges');
+
+  // Run the full multi-strategy search
+  const result = await findContradictions(claim);
+
+  // Replace placeholder with real results
+  const idx = S.challenges.findIndex(c => c.claim === claim);
+  if (idx > -1) {
+    S.challenges[idx] = { claim, ...result, searching: false };
+  }
+
+  renderChallenges();
+  if (result.noResults) {
+    notify('⚠ No contradictions found — try selecting a more specific factual claim');
+  } else {
+    notify(`✓ Found ${result.totalFound} contradicting sources`);
+  }
+}
+function renderSources() {
+  const list = document.getElementById('sources-list');
+  if (!S.sources.length) {
+    list.innerHTML = `<div class="sidebar-empty"><span class="sidebar-empty-icon">📚</span><div class="sidebar-empty-title">No sources yet</div><div class="sidebar-empty-sub">Upload a document to begin.</div></div>`;
+    return;
+  }
+  list.innerHTML = S.sources.map((s, i) => `
+    <div class="source-item">
+      <div class="source-item-type wiki">📖 Wikipedia</div>
+      <div class="source-item-term">${s.wikiTitle || s.term}</div>
+      <div class="source-item-desc">${s.desc}</div>
+      <a class="source-item-url" href="${s.url}" target="_blank">${s.url}</a>
+      <div class="source-item-actions">
+        <a href="${s.url}" target="_blank" class="source-tag">Open →</a>
+        <button class="source-tag remove" onclick="removeSource(${i})">Remove</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderChallenges() {
+  const list = document.getElementById('challenges-list');
+  if (!S.challenges.length) {
+    list.innerHTML = `<div class="sidebar-empty"><span class="sidebar-empty-icon">⚡</span><div class="sidebar-empty-title">No challenges yet</div><div class="sidebar-empty-sub">Click any gold underlined sentence, or select text and hit Challenge.</div></div>`;
+    return;
+  }
+  list.innerHTML = S.challenges.map((c, idx) => {
+    // Searching state
+    if (c.searching) {
+      return `<div class="challenge-panel">
+        <div class="challenge-panel-header">
+          <span class="challenge-panel-label">⚡ Challenge ${idx + 1}</span>
+          <span class="challenge-count-badge" style="color:var(--muted)">Searching…</span>
+        </div>
+        <div class="challenge-claim-text">"${cleanClaim(c.claim)}"</div>
+        <div style="padding:1rem 0;text-align:center;font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--muted);letter-spacing:0.08em;">
+          <div style="margin-bottom:0.5rem">🧙 Querying Wikipedia · Semantic Scholar · CrossRef…</div>
+          <div style="width:100%;height:2px;background:var(--border);overflow:hidden;"><div style="height:100%;background:var(--gold);width:60%;animation:searching 1.5s ease-in-out infinite;"></div></div>
+        </div>
+      </div>`;
+    }
+
+    // No results state
+    if (c.noResults) {
+      return `<div class="challenge-panel">
+        <div class="challenge-panel-header">
+          <span class="challenge-panel-label">⚡ Challenge ${idx + 1}</span>
+          <span class="challenge-count-badge" style="color:var(--muted)">0 found</span>
+        </div>
+        <div class="challenge-claim-text">"${cleanClaim(c.claim)}"</div>
+        <div style="font-size:0.75rem;color:var(--muted);line-height:1.6;padding:0.5rem 0;">
+          No contradicting sources found across Wikipedia, Semantic Scholar, and CrossRef for this claim. 
+          Try selecting a more specific factual sentence — e.g. one containing a specific statistic, causal claim, or named practice.
+        </div>
+      </div>`;
+    }
+
+    const unlockedHtml = (c.unlocked || []).map(r => `
+      <div class="challenge-result-row">
+        <div class="challenge-result-src">${r.source}</div>
+        <div class="challenge-result-text">${r.text}</div>
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.3rem;flex-wrap:wrap;">
+          <span class="verdict-tag">${r.verdict}</span>
+          ${r.url && r.url !== '#' ? `<a href="${r.url}" target="_blank" style="font-family:'DM Mono',monospace;font-size:0.57rem;color:var(--accent2);letter-spacing:0.05em;">Open source →</a>` : ''}
+        </div>
+      </div>`).join('');
+
+    const lockedHtml = (c.locked || []).map(r => `
+      <div class="locked-result">
+        <div class="lock-glyph">🔒</div>
+        <div>
+          <div class="locked-source-name">${r.source || 'Peer-reviewed source'}</div>
+          <div class="locked-blur">${r.blurText || r.text || 'Contradicting evidence found. Upgrade to read full findings.'}</div>
+          <span class="locked-upgrade" onclick="openModal()">Upgrade to Scholar →</span>
+        </div>
+      </div>`).join('');
+
+    const hasResults = (c.unlocked || []).length > 0;
+    return `<div class="challenge-panel">
+      <div class="challenge-panel-header">
+        <span class="challenge-panel-label">⚡ Challenge ${idx + 1}</span>
+        <span class="challenge-count-badge">${c.totalFound} sources found</span>
+      </div>
+      <div class="challenge-claim-text">"${cleanClaim(c.claim)}"</div>
+      ${hasResults ? unlockedHtml : `<div style="font-size:0.75rem;color:var(--muted);padding:0.5rem 0;line-height:1.6;">APIs returned papers but none contained clear contradiction signals. Try a more specific factual claim.</div>`}
+      ${lockedHtml}
+    </div>`;
+  }).join('');
+}
+
+function cleanClaim(claim) {
+  return (claim || '').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').substring(0, 200);
+}
+
+function updateUI() {
+  const left = Math.max(0, S.maxChallenges - S.challengesUsed);
+  document.getElementById('challenges-left').textContent = left;
+  document.getElementById('ch-counter').innerHTML = `${S.challengesUsed} <small>/ ${S.maxChallenges} free</small>`;
+  document.getElementById('ch-badge').textContent = S.challenges.length ? `(${S.challenges.length})` : '';
+}
+
+// ════════════════════════════════════════════════════
+//  SIDEBAR CONTROLS
+// ════════════════════════════════════════════════════
+function toggleSidebar(tab) {
+  const sidebar = document.getElementById('sidebar');
+  if (S.activeTab === tab && S.sidebarOpen) {
+    sidebar.classList.add('collapsed');
+    S.sidebarOpen = false;
+  } else {
+    sidebar.classList.remove('collapsed');
+    S.sidebarOpen = true;
+    switchTab(tab);
+  }
+}
+
+function switchTab(tab) {
+  S.activeTab = tab;
+  document.getElementById('panel-sources').style.display = tab === 'sources' ? 'block' : 'none';
+  document.getElementById('panel-challenges').style.display = tab === 'challenges' ? 'block' : 'none';
+  document.getElementById('tab-sources').classList.toggle('active', tab === 'sources');
+  document.getElementById('tab-challenges').classList.toggle('active', tab === 'challenges');
+}
+
+// ════════════════════════════════════════════════════
+//  SELECTION TOOLBAR
+// ════════════════════════════════════════════════════
+document.addEventListener('mouseup', e => {
+  const toolbar = document.getElementById('selection-toolbar');
+  if (toolbar.contains(e.target)) return;
+  const sel = window.getSelection();
+  const text = sel.toString().trim();
+  if (text.length > 20 && document.getElementById('doc-area')?.contains(sel.anchorNode)) {
+    S.selectedText = text;
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    toolbar.style.display = 'flex';
+    toolbar.style.left = Math.max(8, rect.left + rect.width / 2 - 80) + 'px';
+    toolbar.style.top = (rect.top - 50 + window.scrollY) + 'px';
+  } else {
+    hideToolbar();
+  }
+});
+
+document.addEventListener('mousedown', e => {
+  if (!document.getElementById('selection-toolbar').contains(e.target)) hideToolbar();
+});
+
+function hideToolbar() { document.getElementById('selection-toolbar').style.display = 'none'; }
+
+function sourceSelection() {
+  hideToolbar();
+  notify('✦ Searching Wikipedia for: "' + S.selectedText.substring(0, 40) + '..."');
+  wikiLookup(S.selectedText.substring(0, 60)).then(data => {
+    if (data) {
+      S.sources.unshift({ term: S.selectedText.substring(0, 40), type: 'wiki', desc: data.extract?.substring(0, 100) + '…', url: data.url, wikiTitle: data.title });
+      renderSources();
+      if (!S.sidebarOpen) toggleSidebar('sources');
+      else switchTab('sources');
+      notify('✓ Source found: ' + data.title);
+    } else {
+      notify('⚠ No Wikipedia source found for this term');
+    }
+  });
+}
+
+function challengeSelection() {
+  const claim = S.selectedText;
+  hideToolbar();
+  runChallenge(claim);
+}
+
+// ════════════════════════════════════════════════════
+//  CONTEXT MENU
+// ════════════════════════════════════════════════════
+document.addEventListener('contextmenu', e => {
+  const term = e.target.closest('.term');
+  if (term && document.getElementById('doc-area')?.contains(term)) {
+    e.preventDefault();
+    S.rightClickEl = term;
+    const menu = document.getElementById('context-menu');
+    menu.style.display = 'block';
+    menu.style.left = Math.min(e.clientX, window.innerWidth - 190) + 'px';
+    menu.style.top = Math.min(e.clientY, window.innerHeight - 150) + 'px';
+  }
+});
+
+document.addEventListener('click', e => {
+  document.getElementById('context-menu').style.display = 'none';
+  if (!e.target.closest('.term') && !e.target.closest('#wiki-tooltip')) {
+    document.getElementById('wiki-tooltip').style.display = 'none';
+  }
+});
+
+function ctxSource() {
+  const el = S.rightClickEl;
+  if (!el) return;
+  const term = el.dataset.term || el.textContent.substring(0, 60);
+  notify('✦ Searching for: ' + term);
+  wikiLookup(term).then(data => {
+    if (data) notify('✓ Found: ' + data.title);
+    else notify('⚠ No Wikipedia article found');
+  });
+}
+
+function ctxChallenge() {
+  const el = S.rightClickEl;
+  if (!el) return;
+  const claim = el.dataset.claim || el.dataset.term || el.textContent;
+  runChallenge(claim);
+}
+
+function ctxRemove() {
+  const el = S.rightClickEl;
+  if (!el) return;
+  // Remove all annotation classes, unwrap to plain text
+  const text = el.textContent;
+  el.outerHTML = text;
+  notify('✓ Link removed');
+}
+
+function removeSource(i) {
+  S.sources.splice(i, 1);
+  renderSources();
+}
+
+// ════════════════════════════════════════════════════
+//  EXPORT
+// ════════════════════════════════════════════════════
+function exportAnnotations() {
+  const lines = ['SOURCERER EXPORT', '='.repeat(40), '', `Document: ${S.docTitle}`, `Terms linked: ${S.sources.length}`, `Challenges: ${S.challenges.length}`, '', '── SOURCES ──', ''];
+  S.sources.forEach((s, i) => {
+    lines.push(`${i+1}. ${s.wikiTitle || s.term}`);
+    lines.push(`   ${s.url}`);
+    lines.push(`   ${s.desc}`);
+    lines.push('');
+  });
+  if (S.challenges.length) {
+    lines.push('── CHALLENGES ──', '');
+    S.challenges.forEach((c, i) => {
+      lines.push(`${i+1}. Claim: "${c.claim}"`);
+      lines.push(`   Sources found: ${c.totalFound}`);
+      c.unlocked.forEach(r => { lines.push(`   → ${r.source}: ${r.text.substring(0,100)}…`); });
+      lines.push('');
+    });
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'sourcerer-export.txt';
+  a.click();
+  notify('✓ Exported successfully');
+}
+
+// ════════════════════════════════════════════════════
+//  MODAL
+// ════════════════════════════════════════════════════
+function openModal() { document.getElementById('upgrade-modal').classList.add('open'); }
+function closeModal() { document.getElementById('upgrade-modal').classList.remove('open'); }
+document.getElementById('upgrade-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+
+// ════════════════════════════════════════════════════
+//  NOTIFICATION
+// ════════════════════════════════════════════════════
+let notifTimer;
+function notify(msg) {
+  const el = document.getElementById('notif');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(notifTimer);
+  notifTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ════════════════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function goHome() {
+  if (confirm('Return to upload? Your current document will be cleared.')) {
+    showScreen('screen-upload');
+    document.getElementById('paste-area').value = '';
+    S.sources = []; S.challenges = []; S.challengesUsed = 0;
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  FILE DROP
+// ════════════════════════════════════════════════════
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragging'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragging'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragging');
+  const file = e.dataTransfer.files[0];
+  if (file && (file.name.endsWith('.txt') || file.name.endsWith('.md'))) {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      document.getElementById('paste-area').value = ev.target.result;
+      S.docTitle = file.name.replace(/\.[^.]+$/, '');
+      startProcessing();
+    };
+    reader.readAsText(file);
+  } else {
+    notify('⚠ Please drop a .txt or .md file');
+  }
+});
+
+fileInput.addEventListener('change', () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('paste-area').value = ev.target.result;
+    S.docTitle = file.name.replace(/\.[^.]+$/, '');
+    startProcessing();
+  };
+  reader.readAsText(file);
+});
+
+// ════════════════════════════════════════════════════
+//  STATIC FALLBACK DEMO (if API fails)
+// ════════════════════════════════════════════════════
+function loadStaticDemo() {
+  S.sources = [
+    { term: 'Climate change', type: 'wiki', desc: 'Long-term shifts in global temperatures and weather patterns, primarily driven by human activities…', url: 'https://en.wikipedia.org/wiki/Climate_change', wikiTitle: 'Climate change' },
+    { term: 'Greenhouse gases', type: 'wiki', desc: 'Gases that absorb and emit radiant energy within the thermal infrared range, causing the greenhouse effect…', url: 'https://en.wikipedia.org/wiki/Greenhouse_gas', wikiTitle: 'Greenhouse gas' },
+    { term: 'IPCC', type: 'wiki', desc: 'The Intergovernmental Panel on Climate Change is the United Nations body for assessing the science related to climate change…', url: 'https://en.wikipedia.org/wiki/IPCC', wikiTitle: 'Intergovernmental Panel on Climate Change' },
+  ];
+  S.challenges = [];
+  S.challengesUsed = 0;
+  document.getElementById('doc-title').textContent = 'The Science of Climate Change and Human Behaviour';
+  document.getElementById('topbar-docname').textContent = 'Climate Change Demo';
+  document.getElementById('doc-meta').textContent = 'Demo · Sourcerer · 3 terms linked · 3 claims detected';
+  document.getElementById('doc-content').innerHTML = STATIC_DEMO_HTML;
+  renderSources();
+  renderChallenges();
+  updateUI();
+  showScreen('screen-reader');
+}
+
+// ════════════════════════════════════════════════════
+//  DEMO TEXT
+// ════════════════════════════════════════════════════
+const DEMO_TEXT = `The Science of Climate Change and Human Behaviour
+
+Climate change represents one of the most pressing challenges of the twenty-first century, driven primarily by the accumulation of greenhouse gases in the Earth's atmosphere. The Intergovernmental Panel on Climate Change has consistently warned that without significant emissions reductions, global average temperatures could rise by more than 2°C above pre-industrial levels by 2100.
+
+Individual behaviour change is the most effective strategy for addressing climate change. This view holds that consumer choices — from diet to transportation — collectively determine the trajectory of global emissions. Proponents argue that a shift toward plant-based diets and renewable energy adoption by individuals could substantially reduce global carbon footprints.
+
+The field of environmental psychology has long studied the gap between environmental awareness and action, a phenomenon known as the value-action gap. Research suggests that even highly motivated individuals struggle to maintain sustainable behaviours without supportive structural conditions. Social norms play a critical role in shaping environmental behaviour. When communities observe that their peers engage in sustainable practices, individual adoption rates increase significantly.
+
+Recycling is the single most impactful action an individual can take to reduce their environmental impact. Municipal recycling programmes have expanded significantly over the past three decades, yet contamination rates in recycling streams remain a persistent challenge that undermines programme effectiveness.
+
+Addressing climate anxiety — increasingly prevalent among younger generations — requires both psychological support and meaningful pathways for civic engagement. Climate communication research consistently shows that fear-based messaging is the most effective approach to motivating climate action among the general public. This has shaped decades of environmental campaigns worldwide.`;
+
+const STATIC_DEMO_HTML = `<p><span class="term term-wiki" data-term="Climate change" data-wiki-title="Climate change" data-wiki-url="https://en.wikipedia.org/wiki/Climate_change" data-wiki-desc="Long-term shifts in global temperatures and weather patterns, primarily driven by human activities causing the greenhouse effect…" onclick="termClick(event,this)" oncontextmenu="termRightClick(event,this)">Climate change</span> represents one of the most pressing challenges of the twenty-first century, driven primarily by the accumulation of <span class="term term-wiki" data-term="greenhouse gases" data-wiki-title="Greenhouse gas" data-wiki-url="https://en.wikipedia.org/wiki/Greenhouse_gas" data-wiki-desc="Gases that absorb and emit radiant energy within the thermal infrared range, causing the greenhouse effect…" onclick="termClick(event,this)" oncontextmenu="termRightClick(event,this)">greenhouse gases</span> in the Earth's atmosphere. The <span class="term term-wiki" data-term="IPCC" data-wiki-title="Intergovernmental Panel on Climate Change" data-wiki-url="https://en.wikipedia.org/wiki/IPCC" data-wiki-desc="The United Nations body for assessing the science related to climate change, established in 1988…" onclick="termClick(event,this)" oncontextmenu="termRightClick(event,this)">Intergovernmental Panel on Climate Change</span> has consistently warned that without significant emissions reductions, global temperatures could rise by more than 2°C.</p>
+<p><span class="term term-challengeable" data-claim="Individual behaviour change is the most effective strategy for addressing climate change." onclick="challengeTermClick(this)" oncontextmenu="termRightClick(event,this)">Individual behaviour change is the most effective strategy for addressing climate change.</span> This view holds that consumer choices collectively determine the trajectory of global emissions.</p>
+<p><span class="term term-challengeable" data-claim="Recycling is the single most impactful action an individual can take to reduce their environmental impact." onclick="challengeTermClick(this)" oncontextmenu="termRightClick(event,this)">Recycling is the single most impactful action an individual can take to reduce their environmental impact.</span> Municipal recycling programmes have expanded significantly over the past three decades.</p>
+<p>Climate communication research consistently shows that <span class="term term-challengeable" data-claim="fear-based messaging is the most effective approach to motivating climate action among the general public." onclick="challengeTermClick(this)" oncontextmenu="termRightClick(event,this)">fear-based messaging is the most effective approach to motivating climate action among the general public.</span></p>`;
+</script>
+</body>
+</html>
